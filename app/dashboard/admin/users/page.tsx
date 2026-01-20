@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { MoreHorizontal, Pencil, Trash2, UserPlus } from "lucide-react"
+import { MoreHorizontal, Pencil, Trash2, UserPlus, Loader2 } from "lucide-react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { DataTable } from "@/components/dashboard/data-table"
 import { Button } from "@/components/ui/button"
@@ -19,12 +19,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { mockUsers } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { useMutation } from "@/hooks/use-mutation"
+import { usersAPI } from "@/lib/api"
 import type { User, UserRole } from "@/lib/types"
 import toast from "react-hot-toast"
 
 const roleColors = {
-  admin: "bg-red-100 text-red-700",
+  admin: "bg-blue-100 text-blue-700",
   petugas: "bg-blue-100 text-blue-700",
   peminjam: "bg-green-100 text-green-700",
 }
@@ -36,10 +38,50 @@ const roleLabels = {
 }
 
 export default function UsersPage() {
-  const [users, setUsers] = useState(mockUsers)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [formData, setFormData] = useState({ name: "", email: "", role: "peminjam" as UserRole })
+  const [localUsers, setLocalUsers] = useState<User[]>([])
+
+  const { data: apiUsers, loading: loadingUsers } = useApi(() => usersAPI.getAll(), [], {
+    showToast: false,
+  })
+
+  const users = apiUsers || localUsers
+
+  const { mutate: createUser, loading: loadingCreate } = useMutation(
+    (data: Omit<User, "id" | "createdAt">) =>
+      usersAPI.create(data).catch(() => Promise.reject(new Error("Gagal membuat pengguna"))),
+    {
+      onSuccess: (newUser) => {
+        setLocalUsers([...users, newUser])
+        setIsDialogOpen(false)
+        toast.success("Pengguna berhasil ditambahkan")
+      },
+    },
+  )
+
+  const { mutate: updateUser, loading: loadingUpdate } = useMutation(
+    (data: { id: string; updates: Partial<User> }) =>
+      usersAPI.update(data.id, data.updates).catch(() => Promise.reject(new Error("Gagal memperbarui pengguna"))),
+    {
+      onSuccess: (updated) => {
+        setLocalUsers(users.map((u) => (u.id === updated.id ? updated : u)))
+        setIsDialogOpen(false)
+        toast.success("Pengguna berhasil diperbarui")
+      },
+    },
+  )
+
+  const { mutate: deleteUser, loading: loadingDelete } = useMutation(
+    (id: string) => usersAPI.delete(id).catch(() => Promise.reject(new Error("Gagal menghapus pengguna"))),
+    {
+      onSuccess: () => {
+        setLocalUsers(users.filter((u) => u.id !== editingUser?.id))
+        toast.success("Pengguna berhasil dihapus")
+      },
+    },
+  )
 
   const handleOpenDialog = (user?: User) => {
     if (user) {
@@ -53,24 +95,23 @@ export default function UsersPage() {
   }
 
   const handleSave = () => {
-    if (editingUser) {
-      setUsers(users.map((u) => (u.id === editingUser.id ? { ...u, ...formData } : u)))
-      toast.success("Pengguna berhasil diperbarui")
-    } else {
-      const newUser: User = {
-        id: String(users.length + 1),
-        ...formData,
-        createdAt: new Date().toISOString(),
-      }
-      setUsers([...users, newUser])
-      toast.success("Pengguna berhasil ditambahkan")
+    if (!formData.name || !formData.email) {
+      toast.error("Nama dan email harus diisi")
+      return
     }
-    setIsDialogOpen(false)
+
+    if (editingUser) {
+      updateUser({ id: editingUser.id, updates: formData })
+    } else {
+      createUser(formData)
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setUsers(users.filter((u) => u.id !== id))
-    toast.success("Pengguna berhasil dihapus")
+  const handleDelete = async (id: string) => {
+    if (confirm("Apakah Anda yakin ingin menghapus pengguna ini?")) {
+      setEditingUser({ ...editingUser, id } as User)
+      await deleteUser(id)
+    }
   }
 
   const columns: ColumnDef<User>[] = [
@@ -104,7 +145,7 @@ export default function UsersPage() {
       cell: ({ row }) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" disabled={loadingDelete}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -135,16 +176,22 @@ export default function UsersPage() {
           <p className="text-muted-foreground">Kelola data pengguna sistem</p>
         </div>
         <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700" disabled={loadingUsers}>
             <UserPlus className="mr-2 h-4 w-4" />
             Tambah Pengguna
           </Button>
         </motion.div>
       </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <DataTable columns={columns} data={users} searchKey="name" searchPlaceholder="Cari nama pengguna..." />
-      </motion.div>
+      {loadingUsers ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        </div>
+      ) : (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+          <DataTable columns={columns} data={users} searchKey="name" searchPlaceholder="Cari nama pengguna..." />
+        </motion.div>
+      )}
 
       {/* User Dialog */}
       <AnimatePresence>
@@ -203,8 +250,21 @@ export default function UsersPage() {
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Batal
                   </Button>
-                  <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
-                    {editingUser ? "Simpan Perubahan" : "Tambah"}
+                  <Button
+                    onClick={handleSave}
+                    className="bg-blue-600 hover:bg-blue-700"
+                    disabled={loadingCreate || loadingUpdate}
+                  >
+                    {loadingCreate || loadingUpdate ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Memproses...
+                      </>
+                    ) : editingUser ? (
+                      "Simpan Perubahan"
+                    ) : (
+                      "Tambah"
+                    )}
                   </Button>
                 </DialogFooter>
               </motion.div>

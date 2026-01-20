@@ -152,7 +152,7 @@ export function Sidebar() {
       <div className="p-3 border-t border-sidebar-border">
         <div className={cn("flex items-center gap-3", isCollapsed && "justify-center")}>
           <div className="h-9 w-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium shrink-0">
-            {user?.name?.charAt(0).toUpperCase() || "U"}
+            {user?.name?.charAt(0).toUpperCase() ?? "G"}
           </div>
           <AnimatePresence mode="wait">
             {!isCollapsed && (
@@ -162,8 +162,8 @@ export function Sidebar() {
                 exit={{ opacity: 0, x: -10 }}
                 className="flex-1 min-w-0"
               >
-                <p className="text-sm font-medium truncate text-sidebar-foreground">{user?.name}</p>
-                <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.role}</p>
+                <p className="text-sm font-medium truncate text-sidebar-foreground">{user?.name ?? "Guest"}</p>
+                <p className="text-xs text-sidebar-foreground/60 capitalize">{user?.role ?? "guest"}</p>
               </motion.div>
             )}
           </AnimatePresence>

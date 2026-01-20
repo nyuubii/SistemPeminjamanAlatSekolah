@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, Suspense } from "react"
+import { useState, Suspense, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { mockTools, mockCategories } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { useMutation } from "@/hooks/use-mutation"
+import { toolsAPI, categoriesAPI, borrowingsAPI } from "@/lib/api"
 import { useSearchStore } from "@/lib/store"
 import type { Tool } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -59,6 +61,12 @@ function CatalogContent() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const { data: toolsData } = useApi(() => toolsAPI.getAll(), [], { showToast: false })
+  const { data: categoriesData } = useApi(() => categoriesAPI.getAll(), [], { showToast: false })
+
+  const tools = toolsData || []
+  const categories = categoriesData || []
+
   const { query: globalQuery } = useSearchStore()
 
   const {
@@ -74,9 +82,22 @@ function CatalogContent() {
     },
   })
 
+  const { mutate: submitBorrowing, loading: loadingSubmit } = useMutation(
+    (data: { toolId: string; borrowDate: string; returnDate: string; quantity: number; notes?: string }) =>
+      borrowingsAPI.create(data),
+    {
+      onSuccess: () => {
+        toast.success(`Permintaan peminjaman ${selectedTool?.name} berhasil diajukan!`)
+        setIsDialogOpen(false)
+        setSelectedTool(null)
+        reset()
+      },
+    },
+  )
+
   const effectiveQuery = searchQuery || globalQuery
 
-  const filteredTools = mockTools.filter((tool) => {
+  const filteredTools = tools.filter((tool) => {
     const matchesSearch =
       tool.name.toLowerCase().includes(effectiveQuery.toLowerCase()) ||
       tool.description.toLowerCase().includes(effectiveQuery.toLowerCase())
@@ -91,12 +112,14 @@ function CatalogContent() {
   }
 
   const onSubmit = async (data: BorrowingForm) => {
-    setIsSubmitting(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    toast.success(`Permintaan peminjaman ${selectedTool?.name} berhasil diajukan!`)
-    setIsSubmitting(false)
-    setIsDialogOpen(false)
-    setSelectedTool(null)
+    if (!selectedTool) return
+    submitBorrowing({
+      toolId: selectedTool.id,
+      borrowDate: format(data.borrowDate, "yyyy-MM-dd"),
+      returnDate: format(data.returnDate, "yyyy-MM-dd"),
+      quantity: data.quantity,
+      notes: data.notes,
+    })
   }
 
   return (
@@ -130,7 +153,7 @@ function CatalogContent() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Semua Kategori</SelectItem>
-              {mockCategories.map((category) => (
+              {categories.map((category) => (
                 <SelectItem key={category.id} value={category.id}>
                   {category.name}
                 </SelectItem>

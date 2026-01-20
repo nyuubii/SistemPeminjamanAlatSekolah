@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Plus, FolderOpen, Pencil, Trash2, MoreHorizontal } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,15 +10,21 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { mockCategories } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { useMutation } from "@/hooks/use-mutation"
+import { categoriesAPI } from "@/lib/api"
 import type { Category } from "@/lib/types"
 import toast from "react-hot-toast"
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState(mockCategories)
+  const [localCategories, setLocalCategories] = useState<Category[]>([])
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [formData, setFormData] = useState({ name: "", description: "" })
+
+  const { data: apiCategories } = useApi(() => categoriesAPI.getAll(), [], { showToast: false })
+
+  const categories = apiCategories || localCategories
 
   const handleOpenDialog = (category?: Category) => {
     if (category) {
@@ -31,25 +37,36 @@ export default function CategoriesPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSave = () => {
-    if (editingCategory) {
-      setCategories(categories.map((c) => (c.id === editingCategory.id ? { ...c, ...formData } : c)))
-      toast.success("Kategori berhasil diperbarui")
-    } else {
-      const newCategory: Category = {
-        id: String(categories.length + 1),
-        ...formData,
-        toolCount: 0,
-      }
-      setCategories([...categories, newCategory])
-      toast.success("Kategori berhasil ditambahkan")
+  const handleSave = async () => {
+    if (!formData.name) {
+      toast.error("Nama kategori harus diisi")
+      return
     }
-    setIsDialogOpen(false)
+
+    try {
+      if (editingCategory) {
+        const updated = await categoriesAPI.update(editingCategory.id, formData)
+        setLocalCategories(categories.map((c) => (c.id === updated.id ? updated : c)))
+        toast.success("Kategori berhasil diperbarui")
+      } else {
+        const newCategory = await categoriesAPI.create(formData)
+        setLocalCategories([...categories, newCategory])
+        toast.success("Kategori berhasil ditambahkan")
+      }
+      setIsDialogOpen(false)
+    } catch (error) {
+      toast.error("Gagal menyimpan kategori")
+    }
   }
 
-  const handleDelete = (id: string) => {
-    setCategories(categories.filter((c) => c.id !== id))
-    toast.success("Kategori berhasil dihapus")
+  const handleDelete = async (id: string) => {
+    try {
+      await categoriesAPI.delete(id)
+      setLocalCategories(categories.filter((c) => c.id !== id))
+      toast.success("Kategori berhasil dihapus")
+    } catch (error) {
+      toast.error("Gagal menghapus kategori")
+    }
   }
 
   return (

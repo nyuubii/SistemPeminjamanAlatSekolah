@@ -1,0 +1,9 @@
+{
+  "watch": ["app", "lib", "components", "hooks", "proxy.ts", "middleware.ts", "next.config.mjs", "tsconfig.json"],
+  "ignore": ["**/*.test.ts", "**/*.spec.ts", "node_modules", ".next", ".git"],
+  "ext": "ts,tsx,js,jsx,json,mjs",
+  "delay": 500,
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

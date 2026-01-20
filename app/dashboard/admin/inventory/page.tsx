@@ -1,281 +1,199 @@
 "use client"
 
-import { useState } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Plus, MoreHorizontal, Pencil, Trash2, Package } from "lucide-react"
-import type { ColumnDef } from "@tanstack/react-table"
-import { DataTable } from "@/components/dashboard/data-table"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
+import { Package, Users, ClipboardList, AlertTriangle, Clock, TrendingUp } from "lucide-react"
+import { motion } from "framer-motion"
+import { StatCard } from "@/components/dashboard/stat-card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { mockTools, mockCategories } from "@/lib/mock-data"
-import type { Tool } from "@/lib/types"
-import toast from "react-hot-toast"
+import { Skeleton } from "@/components/ui/skeleton"
+import { dashboardAPI, borrowingsAPI, activityLogsAPI } from "@/lib/api"
+import type { DashboardStats, Borrowing, ActivityLog } from "@/lib/types"
 
-const conditionColors = {
-  baik: "bg-green-100 text-green-700",
-  rusak_ringan: "bg-yellow-100 text-yellow-700",
-  rusak_berat: "bg-red-100 text-red-700",
+const statusColors: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-700",
+  approved: "bg-green-100 text-green-700",
+  rejected: "bg-red-100 text-red-700",
+  returned: "bg-blue-100 text-blue-700",
+  overdue: "bg-orange-100 text-orange-700",
 }
 
-const conditionLabels = {
-  baik: "Baik",
-  rusak_ringan: "Rusak Ringan",
-  rusak_berat: "Rusak Berat",
+const statusLabels: Record<string, string> = {
+  pending: "Menunggu",
+  approved: "Disetujui",
+  rejected: "Ditolak",
+  returned: "Dikembalikan",
+  overdue: "Terlambat",
 }
 
-export default function InventoryPage() {
-  const [tools, setTools] = useState(mockTools)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingTool, setEditingTool] = useState<Tool | null>(null)
-  const [formData, setFormData] = useState({
-    name: "",
-    description: "",
-    categoryId: "",
-    stock: 1,
-    condition: "baik" as Tool["condition"],
-  })
+export default function AdminDashboard() {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [borrowings, setBorrowings] = useState<Borrowing[]>([])
+  const [logs, setLogs] = useState<ActivityLog[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const handleOpenDialog = (tool?: Tool) => {
-    if (tool) {
-      setEditingTool(tool)
-      setFormData({
-        name: tool.name,
-        description: tool.description,
-        categoryId: tool.categoryId,
-        stock: tool.stock,
-        condition: tool.condition,
-      })
-    } else {
-      setEditingTool(null)
-      setFormData({ name: "", description: "", categoryId: "", stock: 1, condition: "baik" })
-    }
-    setIsDialogOpen(true)
-  }
-
-  const handleSave = () => {
-    const category = mockCategories.find((c) => c.id === formData.categoryId)
-    if (editingTool) {
-      setTools(
-        tools.map((t) =>
-          t.id === editingTool.id
-            ? { ...t, ...formData, category: category?.name || "", available: formData.stock }
-            : t,
-        ),
-      )
-      toast.success("Alat berhasil diperbarui")
-    } else {
-      const newTool: Tool = {
-        id: String(tools.length + 1),
-        ...formData,
-        category: category?.name || "",
-        available: formData.stock,
-        createdAt: new Date().toISOString(),
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [statsData, borrowingsData, logsData] = await Promise.all([
+          dashboardAPI.getStats(),
+          borrowingsAPI.getAll(),
+          activityLogsAPI.getAll(),
+        ])
+        setStats(statsData)
+        setBorrowings(borrowingsData) // langsung array
+        setLogs(logsData)             // langsung array
+      } catch (error) {
+        console.error("Failed to fetch dashboard data", error)
+      } finally {
+        setLoading(false)
       }
-      setTools([...tools, newTool])
-      toast.success("Alat berhasil ditambahkan")
     }
-    setIsDialogOpen(false)
+
+    fetchData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+      </div>
+    )
   }
 
-  const handleDelete = (id: string) => {
-    setTools(tools.filter((t) => t.id !== id))
-    toast.success("Alat berhasil dihapus")
-  }
-
-  const columns: ColumnDef<Tool>[] = [
-    {
-      accessorKey: "name",
-      header: "Nama Alat",
-      cell: ({ row }) => (
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-            <Package className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="font-medium">{row.original.name}</p>
-            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{row.original.description}</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "category",
-      header: "Kategori",
-      cell: ({ row }) => <Badge variant="outline">{row.original.category}</Badge>,
-    },
-    {
-      accessorKey: "stock",
-      header: "Stok",
-      cell: ({ row }) => (
-        <div className="text-center">
-          <span className="font-medium">{row.original.available}</span>
-          <span className="text-muted-foreground">/{row.original.stock}</span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: "condition",
-      header: "Kondisi",
-      cell: ({ row }) => (
-        <Badge className={conditionColors[row.original.condition]}>{conditionLabels[row.original.condition]}</Badge>
-      ),
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleOpenDialog(row.original)}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(row.original.id)}>
-              <Trash2 className="mr-2 h-4 w-4" />
-              Hapus
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
-  ]
+  if (!stats) return null
 
   return (
     <div className="space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
-        <div>
-          <h1 className="text-2xl font-bold">Inventaris Alat</h1>
-          <p className="text-muted-foreground">Kelola daftar alat dan stok</p>
-        </div>
-        <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-          <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="mr-2 h-4 w-4" />
-            Tambah Alat
-          </Button>
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
+        <h1 className="text-2xl font-bold text-foreground">Dashboard Admin</h1>
+        <p className="text-muted-foreground">Selamat datang! Berikut ringkasan sistem peminjaman alat.</p>
+      </motion.div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Total Alat"
+          value={stats.totalTools}
+          icon={Package}
+          description="Unit tersedia"
+          trend={{ value: 12, isPositive: true }}
+          delay={0}
+        />
+        <StatCard
+          title="Total Pengguna"
+          value={stats.totalUsers}
+          icon={Users}
+          description="Pengguna aktif"
+          trend={{ value: 8, isPositive: true }}
+          delay={0.1}
+        />
+        <StatCard
+          title="Peminjaman Aktif"
+          value={stats.activeBorrowings}
+          icon={ClipboardList}
+          description="Sedang dipinjam"
+          delay={0.2}
+        />
+        <StatCard
+          title="Menunggu Persetujuan"
+          value={stats.pendingApprovals}
+          icon={Clock}
+          description="Perlu ditinjau"
+          delay={0.3}
+        />
+      </div>
+
+      {/* Charts & Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Borrowings */}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg font-semibold">Peminjaman Terbaru</CardTitle>
+              <TrendingUp className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {borrowings.slice(0, 5).map((borrowing, index) => (
+                <motion.div
+                  key={borrowing.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + index * 0.1 }}
+                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <Package className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{borrowing.tool.name}</p>
+                      <p className="text-xs text-muted-foreground">{borrowing.user.name}</p>
+                    </div>
+                  </div>
+                  <Badge className={statusColors[borrowing.status]}>{statusLabels[borrowing.status]}</Badge>
+                </motion.div>
+              ))}
+            </CardContent>
+          </Card>
         </motion.div>
-      </motion.div>
 
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-        <DataTable columns={columns} data={tools} searchKey="name" searchPlaceholder="Cari nama alat..." />
-      </motion.div>
+        {/* Activity Log */}
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg font-semibold">Log Aktivitas</CardTitle>
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {logs.slice(0, 5).map((log, index) => (
+                <motion.div
+                  key={log.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.5 + index * 0.1 }}
+                  className="flex items-start gap-3 p-3 rounded-lg bg-muted/50"
+                >
+                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-medium shrink-0">
+                    {log.user.name.charAt(0)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">{log.user.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{log.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {new Date(log.createdAt).toLocaleString("id-ID")}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
 
-      {/* Tool Dialog */}
-      <AnimatePresence>
-        {isDialogOpen && (
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogContent className="max-w-md">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-              >
-                <DialogHeader>
-                  <DialogTitle>{editingTool ? "Edit Alat" : "Tambah Alat Baru"}</DialogTitle>
-                  <DialogDescription>
-                    {editingTool ? "Perbarui informasi alat" : "Masukkan data alat baru"}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Nama Alat</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Nama alat"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Deskripsi</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Deskripsi alat"
-                      rows={3}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="category">Kategori</Label>
-                      <Select
-                        value={formData.categoryId}
-                        onValueChange={(v) => setFormData({ ...formData, categoryId: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Pilih kategori" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {mockCategories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="stock">Stok</Label>
-                      <Input
-                        id="stock"
-                        type="number"
-                        min={1}
-                        value={formData.stock}
-                        onChange={(e) => setFormData({ ...formData, stock: Number.parseInt(e.target.value) || 1 })}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="condition">Kondisi</Label>
-                    <Select
-                      value={formData.condition}
-                      onValueChange={(v) => setFormData({ ...formData, condition: v as Tool["condition"] })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="baik">Baik</SelectItem>
-                        <SelectItem value="rusak_ringan">Rusak Ringan</SelectItem>
-                        <SelectItem value="rusak_berat">Rusak Berat</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Batal
-                  </Button>
-                  <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700">
-                    {editingTool ? "Simpan Perubahan" : "Tambah"}
-                  </Button>
-                </DialogFooter>
-              </motion.div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </AnimatePresence>
+      {/* Overdue Warning */}
+      {stats.overdueItems > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-3"
+        >
+          <AlertTriangle className="h-5 w-5 text-orange-500" />
+          <div>
+            <p className="font-medium text-orange-700">Perhatian!</p>
+            <p className="text-sm text-orange-600">
+              Terdapat {stats.overdueItems} item yang terlambat dikembalikan.
+            </p>
+          </div>
+        </motion.div>
+      )}
     </div>
   )
 }

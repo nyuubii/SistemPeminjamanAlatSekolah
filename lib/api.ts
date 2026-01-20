@@ -3,14 +3,17 @@ import { useAuthStore } from "./store"
 import type { User, Tool, Category, Borrowing, ActivityLog, DashboardStats } from "./types"
 
 const api = axios.create({
-  baseURL: "http://localhost:8000/api",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "/api",
   headers: {
     "Content-Type": "application/json",
   },
 })
 
 api.interceptors.request.use((config) => {
-  const token = useAuthStore.getState().token
+  let token = useAuthStore.getState().token
+  if (!token && typeof window !== "undefined") {
+    token = localStorage.getItem("auth-token")
+  }
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -22,7 +25,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()
-      window.location.href = "/login"
+      if (typeof window !== "undefined") {
+        window.location.href = "/login"
+      }
     }
     return Promise.reject(error)
   },
@@ -31,18 +36,65 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: async (email: string, password: string) => {
-    const response = await api.post<{ user: User; token: string }>("/auth/login", { email, password })
-    return response.data
+    const response = await api.post("/login", { email, password })
+    const responseData = response.data
+    const data = responseData.data || responseData
+
+    let user: User | null = null
+    let token: string | null = null
+
+    if (data.user) {
+      const u = data.user
+      user = {
+        id: String(u.id),
+        name: u.nama_lengkap || u.name || u.username,
+        email: u.email,
+        role: u.role as "admin" | "petugas" | "peminjam",
+        createdAt: u.createdAt || u.created_at || new Date().toISOString(),
+      }
+    } else if (data.id && data.email) {
+      user = {
+        id: String(data.id),
+        name: data.nama_lengkap || data.name || data.username,
+        email: data.email,
+        role: data.role as "admin" | "petugas" | "peminjam",
+        createdAt: data.createdAt || data.created_at || new Date().toISOString(),
+      }
+    }
+
+    token =
+      data.token ||
+      data.access_token ||
+      data.accessToken ||
+      responseData.token ||
+      responseData.access_token ||
+      null
+
+    return { user, token }
   },
   logout: async () => {
-    await api.post("/auth/logout")
+    await api.post("/logout")
   },
   getProfile: async () => {
-    const response = await api.get<User>("/auth/profile")
-    return response.data
+    const response = await api.get("/user")
+    const responseData = response.data
+    const data = responseData.data || responseData
+    let user: User | null = null
+    const userData = data.user || data
+
+    if (userData && (userData.id || userData.email)) {
+      user = {
+        id: String(userData.id),
+        name: userData.nama_lengkap || userData.name || userData.username,
+        email: userData.email,
+        role: userData.role as "admin" | "petugas" | "peminjam",
+        createdAt: userData.createdAt || userData.created_at || new Date().toISOString(),
+      }
+    }
+    return user
   },
   updateProfile: async (data: Partial<User>) => {
-    const response = await api.put<User>("/auth/profile", data)
+    const response = await api.put<User>("/user", data)
     return response.data
   },
 }
@@ -50,84 +102,84 @@ export const authAPI = {
 // Users API
 export const usersAPI = {
   getAll: async () => {
-    const response = await api.get<User[]>("/users")
+    const response = await api.get<User[]>("/user")
     return response.data
   },
   getById: async (id: string) => {
-    const response = await api.get<User>(`/users/${id}`)
+    const response = await api.get<User>(`/user/${id}`)
     return response.data
   },
   create: async (data: Omit<User, "id" | "createdAt">) => {
-    const response = await api.post<User>("/users", data)
+    const response = await api.post<User>("/user", data)
     return response.data
   },
   update: async (id: string, data: Partial<User>) => {
-    const response = await api.put<User>(`/users/${id}`, data)
+    const response = await api.put<User>(`/user/${id}`, data)
     return response.data
   },
   delete: async (id: string) => {
-    await api.delete(`/users/${id}`)
+    await api.delete(`/user/${id}`)
   },
 }
 
 // Tools API
 export const toolsAPI = {
   getAll: async () => {
-    const response = await api.get<Tool[]>("/tools")
+    const response = await api.get<Tool[]>("/alat")
     return response.data
   },
   getById: async (id: string) => {
-    const response = await api.get<Tool>(`/tools/${id}`)
+    const response = await api.get<Tool>(`/alat/${id}`)
     return response.data
   },
   create: async (data: Omit<Tool, "id" | "createdAt">) => {
-    const response = await api.post<Tool>("/tools", data)
+    const response = await api.post<Tool>("/alat", data)
     return response.data
   },
   update: async (id: string, data: Partial<Tool>) => {
-    const response = await api.put<Tool>(`/tools/${id}`, data)
+    const response = await api.put<Tool>(`/alat/${id}`, data)
     return response.data
   },
   delete: async (id: string) => {
-    await api.delete(`/tools/${id}`)
+    await api.delete(`/alat/${id}`)
   },
 }
 
 // Categories API
 export const categoriesAPI = {
   getAll: async () => {
-    const response = await api.get<Category[]>("/categories")
+    const response = await api.get<Category[]>("/kategori")
     return response.data
   },
   getById: async (id: string) => {
-    const response = await api.get<Category>(`/categories/${id}`)
+    const response = await api.get<Category>(`/kategori/${id}`)
     return response.data
   },
   create: async (data: Omit<Category, "id" | "toolCount">) => {
-    const response = await api.post<Category>("/categories", data)
+    const response = await api.post<Category>("/kategori", data)
     return response.data
   },
   update: async (id: string, data: Partial<Category>) => {
-    const response = await api.put<Category>(`/categories/${id}`, data)
+    const response = await api.put<Category>(`/kategori/${id}`, data)
     return response.data
   },
   delete: async (id: string) => {
-    await api.delete(`/categories/${id}`)
+    await api.delete(`/kategori/${id}`)
   },
 }
 
 // Borrowings API
 export const borrowingsAPI = {
   getAll: async () => {
-    const response = await api.get<Borrowing[]>("/borrowings")
+    const response = await api.get<Borrowing[]>("/peminjaman")
     return response.data
   },
   getMyBorrowings: async () => {
-    const response = await api.get<Borrowing[]>("/borrowings/my")
+    const response = await api.get<Borrowing[]>("/peminjaman/me")
     return response.data
   },
   getById: async (id: string) => {
-    const response = await api.get<Borrowing>(`/borrowings/${id}`)
+    const response = await api.get<Borrowing>(`/peminjaman/${id}`)
     return response.data
   },
   create: async (data: {
@@ -137,19 +189,19 @@ export const borrowingsAPI = {
     quantity: number
     notes?: string
   }) => {
-    const response = await api.post<Borrowing>("/borrowings", data)
+    const response = await api.post<Borrowing>("/peminjaman", data)
     return response.data
   },
   approve: async (id: string) => {
-    const response = await api.put<Borrowing>(`/borrowings/${id}/approve`)
+    const response = await api.put<Borrowing>(`/peminjaman/${id}/approve`)
     return response.data
   },
   reject: async (id: string, reason?: string) => {
-    const response = await api.put<Borrowing>(`/borrowings/${id}/reject`, { reason })
+    const response = await api.put<Borrowing>(`/peminjaman/${id}/reject`, { reason })
     return response.data
   },
   return: async (id: string) => {
-    const response = await api.put<Borrowing>(`/borrowings/${id}/return`)
+    const response = await api.put<Borrowing>(`/peminjaman/${id}/return`)
     return response.data
   },
 }
@@ -157,15 +209,24 @@ export const borrowingsAPI = {
 // Activity Logs API
 export const activityLogsAPI = {
   getAll: async () => {
-    const response = await api.get<ActivityLog[]>("/activity-logs")
-    return response.data
+    try {
+      const response = await api.get<ActivityLog[]>("/logs")
+      return response.data
+    } catch (error: any) {
+      // Fallback to mock data if endpoint doesn't exist (404)
+      if (error.response?.status === 404) {
+        const { mockActivityLogs } = await import("./mock-data")
+        return mockActivityLogs
+      }
+      throw error
+    }
   },
 }
 
 // Dashboard Stats API
 export const dashboardAPI = {
   getStats: async () => {
-    const response = await api.get<DashboardStats>("/dashboard/stats")
+    const response = await api.get<DashboardStats>("/dashboard")
     return response.data
   },
 }

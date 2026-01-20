@@ -1,18 +1,22 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { FileText, Download, Calendar, Package, TrendingUp, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { mockBorrowings } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { borrowingsAPI } from "@/lib/api"
 import toast from "react-hot-toast"
 
 export default function ReportsPage() {
   const [reportType, setReportType] = useState("borrowings")
   const [period, setPeriod] = useState("month")
   const [isGenerating, setIsGenerating] = useState(false)
+
+  const { data: borrowingsData } = useApi(() => borrowingsAPI.getAll(), [], { showToast: false })
+  const borrowings = borrowingsData || []
 
   const handleGeneratePDF = async () => {
     setIsGenerating(true)
@@ -75,19 +79,19 @@ export default function ReportsPage() {
         
         <div class="stats">
           <div class="stat-card">
-            <div class="stat-value">${mockBorrowings.length}</div>
+            <div class="stat-value">${borrowings.length}</div>
             <div class="stat-label">Total Peminjaman</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value">${mockBorrowings.filter((b) => b.status === "returned").length}</div>
+            <div class="stat-value">${borrowings.filter((b) => b.status === "returned").length}</div>
             <div class="stat-label">Selesai</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value">${mockBorrowings.filter((b) => b.status === "approved").length}</div>
+            <div class="stat-value">${borrowings.filter((b) => b.status === "approved").length}</div>
             <div class="stat-label">Aktif</div>
           </div>
           <div class="stat-card">
-            <div class="stat-value">${mockBorrowings.filter((b) => b.status === "overdue").length}</div>
+            <div class="stat-value">${borrowings.filter((b) => b.status === "overdue").length}</div>
             <div class="stat-label">Terlambat</div>
           </div>
         </div>
@@ -105,7 +109,7 @@ export default function ReportsPage() {
             </tr>
           </thead>
           <tbody>
-            ${mockBorrowings
+            ${borrowings
               .map(
                 (b, i) => `
               <tr>
@@ -153,10 +157,10 @@ setIsGenerating(false);
   }
 
   const stats = {
-    totalBorrowings: mockBorrowings.length,
-    completedBorrowings: mockBorrowings.filter((b) => b.status === "returned").length,
-    activeBorrowings: mockBorrowings.filter((b) => b.status === "approved").length,
-    overdueBorrowings: mockBorrowings.filter((b) => b.status === "overdue").length,
+    totalBorrowings: borrowings.length,
+    completedBorrowings: borrowings.filter((b) => b.status === "returned").length,
+    activeBorrowings: borrowings.filter((b) => b.status === "approved").length,
+    overdueBorrowings: borrowings.filter((b) => b.status === "overdue").length,
   }
 
   return (
@@ -301,7 +305,7 @@ setIsGenerating(false);
                   </tr>
                 </thead>
                 <tbody>
-                  {mockBorrowings.slice(0, 5).map((borrowing, index) => (
+                  {borrowings.slice(0, 5).map((borrowing, index) => (
                     <motion.tr
                       key={borrowing.id}
                       initial={{ opacity: 0 }}

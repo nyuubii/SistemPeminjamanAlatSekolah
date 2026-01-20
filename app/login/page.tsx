@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuthStore } from "@/lib/store"
-import { mockUsers } from "@/lib/mock-data"
 import { authAPI } from "@/lib/api"
 import toast from "react-hot-toast"
 
@@ -52,12 +51,26 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Try backend first
       const response = await authAPI.login(data.email, data.password)
-      login(response.user, response.token)
-      toast.success(`Selamat datang, ${response.user.name}!`)
+      console.log("[Login] API Response:", response)
+      
+      const user = response?.user
+      const token = response?.token
+      
+      // If we have a token but no user, we can still proceed
+      // The dashboard will fetch the user profile
+      if (!token) {
+        console.error("[Login] No token in response:", response)
+        throw new Error("Login gagal: token tidak ditemukan")
+      }
+      
+      // Login with user (may be null) and token
+      login(user ?? { id: "", name: "User", email: data.email, role: "peminjam" as const, createdAt: new Date().toISOString() }, token)
+      toast.success(`Selamat datang, ${user?.name ?? "Pengguna"}!`)
 
-      switch (response.user.role) {
+      // Redirect based on role, default to dashboard
+      const role = user?.role ?? "peminjam"
+      switch (role) {
         case "admin":
           router.push("/dashboard/admin")
           break
@@ -67,33 +80,16 @@ export default function LoginPage() {
         case "peminjam":
           router.push("/dashboard/peminjam")
           break
+        default:
+          router.push("/dashboard")
       }
-    } catch {
-      // Fallback to mock data if backend is not available
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      const user = mockUsers.find((u) => u.email === data.email)
-
-      if (user) {
-        login(user, "mock-jwt-token")
-        toast.success(`Selamat datang, ${user.name}!`)
-
-        switch (user.role) {
-          case "admin":
-            router.push("/dashboard/admin")
-            break
-          case "petugas":
-            router.push("/dashboard/petugas")
-            break
-          case "peminjam":
-            router.push("/dashboard/peminjam")
-            break
-        }
-      } else {
-        toast.error("Email atau password salah")
-      }
+    } catch (error) {
+      console.error("[Login] Error:", error)
+      const message = error instanceof Error ? error.message : "Email atau password salah"
+      toast.error(message)
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
   }
 
   const fillDemoAccount = (email: string) => {

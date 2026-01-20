@@ -1,11 +1,14 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Package, Users, ClipboardList, AlertTriangle, Clock, TrendingUp } from "lucide-react"
 import { motion } from "framer-motion"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { mockDashboardStats, mockBorrowings, mockActivityLogs } from "@/lib/mock-data"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
+import { dashboardAPI, borrowingsAPI, activityLogsAPI } from "@/lib/api"
+import type { DashboardStats, Borrowing, ActivityLog } from "@/lib/types"
 
 const statusColors = {
   pending: "bg-yellow-100 text-yellow-700",
@@ -24,6 +27,47 @@ const statusLabels = {
 }
 
 export default function AdminDashboard() {
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [borrowings, setBorrowings] = useState<Borrowing[]>([])
+  const [logs, setLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [statsData, borrowingsData, logsData] = await Promise.all([
+          dashboardAPI.getStats(),
+          borrowingsAPI.getAll(),
+          activityLogsAPI.getAll(),
+        ])
+        setStats(statsData)
+        setBorrowings(borrowingsData)
+        setLogs(logsData)
+      } catch (error) {
+        console.error("Failed to fetch dashboard data", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!stats) return null
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -36,7 +80,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Alat"
-          value={mockDashboardStats.totalTools}
+          value={stats.totalTools}
           icon={Package}
           description="Unit tersedia"
           trend={{ value: 12, isPositive: true }}
@@ -44,7 +88,7 @@ export default function AdminDashboard() {
         />
         <StatCard
           title="Total Pengguna"
-          value={mockDashboardStats.totalUsers}
+          value={stats.totalUsers}
           icon={Users}
           description="Pengguna aktif"
           trend={{ value: 8, isPositive: true }}
@@ -52,14 +96,14 @@ export default function AdminDashboard() {
         />
         <StatCard
           title="Peminjaman Aktif"
-          value={mockDashboardStats.activeBorrowings}
+          value={stats.activeBorrowings}
           icon={ClipboardList}
           description="Sedang dipinjam"
           delay={0.2}
         />
         <StatCard
           title="Menunggu Persetujuan"
-          value={mockDashboardStats.pendingApprovals}
+          value={stats.pendingApprovals}
           icon={Clock}
           description="Perlu ditinjau"
           delay={0.3}
@@ -76,7 +120,7 @@ export default function AdminDashboard() {
               <TrendingUp className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockBorrowings.slice(0, 5).map((borrowing, index) => (
+              {borrowings.slice(0, 5).map((borrowing, index) => (
                 <motion.div
                   key={borrowing.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -108,7 +152,7 @@ export default function AdminDashboard() {
               <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent className="space-y-4">
-              {mockActivityLogs.slice(0, 5).map((log, index) => (
+              {logs.slice(0, 5).map((log, index) => (
                 <motion.div
                   key={log.id}
                   initial={{ opacity: 0, x: 20 }}
@@ -134,7 +178,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Overdue Warning */}
-      {mockDashboardStats.overdueItems > 0 && (
+      {stats.overdueItems > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -145,7 +189,7 @@ export default function AdminDashboard() {
           <div>
             <p className="font-medium text-orange-700">Perhatian!</p>
             <p className="text-sm text-orange-600">
-              Terdapat {mockDashboardStats.overdueItems} item yang terlambat dikembalikan.
+              Terdapat {stats.overdueItems} item yang terlambat dikembalikan.
             </p>
           </div>
         </motion.div>

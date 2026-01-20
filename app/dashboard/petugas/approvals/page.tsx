@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { Check, X, Clock, Package, User, Calendar, FileCheck } from "lucide-react"
+import { Check, X, Clock, Package, User, Calendar, FileCheck, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -15,7 +15,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { mockBorrowings } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { useMutation } from "@/hooks/use-mutation"
+import { borrowingsAPI } from "@/lib/api"
 import type { Borrowing } from "@/lib/types"
 import toast from "react-hot-toast"
 
@@ -36,36 +38,68 @@ const statusLabels = {
 }
 
 export default function ApprovalsPage() {
-  const [borrowings, setBorrowings] = useState(mockBorrowings)
   const [selectedBorrowing, setSelectedBorrowing] = useState<Borrowing | null>(null)
   const [rejectReason, setRejectReason] = useState("")
   const [showRejectDialog, setShowRejectDialog] = useState(false)
+  const [localBorrowings, setLocalBorrowings] = useState<Borrowing[]>([])
+
+  const { data: apiBorrowings, loading: loadingBorrowings } = useApi(
+    () => borrowingsAPI.getAll(),
+    [],
+    { showToast: false },
+  )
+
+  const borrowings = apiBorrowings || localBorrowings
+
+  const { mutate: approveBorrowing, loading: loadingApprove } = useMutation(
+    (id: string) => borrowingsAPI.approve(id).catch(() => Promise.reject(new Error("Gagal menyetujui peminjaman"))),
+    {
+      onSuccess: (approved) => {
+        setLocalBorrowings(borrowings.map((b) => (b.id === approved.id ? approved : b)))
+        toast.success("Peminjaman disetujui")
+      },
+    },
+  )
+
+  const { mutate: rejectBorrowing, loading: loadingReject } = useMutation(
+    (data: { id: string; reason?: string }) =>
+      borrowingsAPI.reject(data.id, data.reason).catch(() => Promise.reject(new Error("Gagal menolak peminjaman"))),
+    {
+      onSuccess: (rejected) => {
+        setLocalBorrowings(borrowings.map((b) => (b.id === rejected.id ? rejected : b)))
+        setShowRejectDialog(false)
+        setRejectReason("")
+        setSelectedBorrowing(null)
+        toast.success("Peminjaman ditolak")
+      },
+    },
+  )
+
+  const { mutate: returnBorrowing, loading: loadingReturn } = useMutation(
+    (id: string) => borrowingsAPI.return(id).catch(() => Promise.reject(new Error("Gagal konfirmasi pengembalian"))),
+    {
+      onSuccess: (returned) => {
+        setLocalBorrowings(borrowings.map((b) => (b.id === returned.id ? returned : b)))
+        toast.success("Pengembalian dikonfirmasi")
+      },
+    },
+  )
 
   const pendingBorrowings = borrowings.filter((b) => b.status === "pending")
   const approvedBorrowings = borrowings.filter((b) => b.status === "approved" || b.status === "overdue")
 
-  const handleApprove = (borrowing: Borrowing) => {
-    setBorrowings(borrowings.map((b) => (b.id === borrowing.id ? { ...b, status: "approved" as const } : b)))
-    toast.success(`Peminjaman ${borrowing.tool.name} oleh ${borrowing.user.name} disetujui`)
-  }
-
   const handleReject = () => {
     if (selectedBorrowing) {
-      setBorrowings(borrowings.map((b) => (b.id === selectedBorrowing.id ? { ...b, status: "rejected" as const } : b)))
-      toast.success(`Peminjaman ditolak`)
-      setShowRejectDialog(false)
-      setSelectedBorrowing(null)
-      setRejectReason("")
+      rejectBorrowing({ id: selectedBorrowing.id, reason: rejectReason })
     }
   }
 
-  const handleReturn = (borrowing: Borrowing) => {
-    setBorrowings(
-      borrowings.map((b) =>
-        b.id === borrowing.id ? { ...b, status: "returned" as const, actualReturnDate: new Date().toISOString() } : b,
-      ),
+  if (loadingBorrowings) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+      </div>
     )
-    toast.success(`${borrowing.tool.name} telah dikembalikan`)
   }
 
   return (
@@ -167,10 +201,17 @@ export default function ApprovalsPage() {
                       <Button
                         size="sm"
                         className="bg-green-600 hover:bg-green-700"
-                        onClick={() => handleApprove(borrowing)}
+                        onClick={() => approveBorrowing(borrowing.id)}
+                        disabled={loadingApprove}
                       >
-                        <Check className="h-4 w-4 mr-1" />
-                        Setujui
+                        {loadingApprove ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <>
+                            <Check className="h-4 w-4 mr-1" />
+                            Setujui
+                          </>
+                        )}
                       </Button>
                     </motion.div>
                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
@@ -181,9 +222,16 @@ export default function ApprovalsPage() {
                           setSelectedBorrowing(borrowing)
                           setShowRejectDialog(true)
                         }}
+                        disabled={loadingReject}
                       >
-                        <X className="h-4 w-4 mr-1" />
-                        Tolak
+                        {loadingReject ? (
+                          <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                        ) : (
+                          <>
+                            <X className="h-4 w-4 mr-1" />
+                            Tolak
+                          </>
+                        )}
                       </Button>
                     </motion.div>
                   </div>
@@ -241,9 +289,10 @@ export default function ApprovalsPage() {
                       size="sm"
                       variant="outline"
                       className="border-blue-200 text-blue-600 hover:bg-blue-50 bg-transparent"
-                      onClick={() => handleReturn(borrowing)}
+                      onClick={() => returnBorrowing(borrowing.id)}
+                      disabled={loadingReturn}
                     >
-                      Konfirmasi Pengembalian
+                      {loadingReturn ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <>Konfirmasi Pengembalian</>}
                     </Button>
                   </motion.div>
                 </motion.div>
@@ -272,8 +321,8 @@ export default function ApprovalsPage() {
             <Button variant="outline" onClick={() => setShowRejectDialog(false)}>
               Batal
             </Button>
-            <Button variant="destructive" onClick={handleReject}>
-              Tolak Peminjaman
+            <Button variant="destructive" onClick={handleReject} disabled={loadingReject}>
+              {loadingReject ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <>Tolak Peminjaman</>}
             </Button>
           </DialogFooter>
         </DialogContent>

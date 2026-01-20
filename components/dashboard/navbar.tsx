@@ -35,8 +35,8 @@ export function Navbar() {
 
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [profileName, setProfileName] = useState(user?.name || "")
-  const [profileEmail, setProfileEmail] = useState(user?.email || "")
+  const [profileName, setProfileName] = useState(user?.name ?? "")
+  const [profileEmail, setProfileEmail] = useState(user?.email ?? "")
 
   const handleLogout = () => {
     logout()
@@ -111,12 +111,12 @@ export function Navbar() {
               <Button variant="ghost" className="flex items-center gap-2 px-2">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-blue-600 text-white">
-                    {user?.name?.charAt(0).toUpperCase()}
+                    {user?.name?.charAt(0).toUpperCase() ?? "G"}
                   </AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block text-left">
-                  <p className="text-sm font-medium">{user?.name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{user?.role}</p>
+                  <p className="text-sm font-medium">{user?.name ?? "Guest"}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{user?.role ?? "guest"}</p>
                 </div>
               </Button>
             </DropdownMenuTrigger>
@@ -125,8 +125,8 @@ export function Navbar() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  setProfileName(user?.name || "")
-                  setProfileEmail(user?.email || "")
+                  setProfileName(user?.name ?? "")
+                  setProfileEmail(user?.email ?? "")
                   setIsProfileOpen(true)
                 }}
               >
@@ -175,7 +175,7 @@ export function Navbar() {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Input value={user?.role || ""} disabled className="capitalize" />
+              <Input value={user?.role ?? ""} disabled className="capitalize" />
             </div>
           </div>
           <DialogFooter>

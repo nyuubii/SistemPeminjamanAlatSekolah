@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Package, Calendar, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { mockBorrowings } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { borrowingsAPI } from "@/lib/api"
+import type { Borrowing } from "@/lib/types"
 
 const statusConfig = {
   pending: {
@@ -37,9 +39,9 @@ const statusConfig = {
 }
 
 export default function BorrowingsPage() {
-  const [myBorrowings] = useState(
-    mockBorrowings.filter((b) => b.userId === "3" || b.userId === "4" || b.userId === "5"),
-  )
+  const { data: borrowingsData } = useApi(() => borrowingsAPI.getMyBorrowings(), [], { showToast: false })
+
+  const myBorrowings = borrowingsData || []
 
   const activeBorrowings = myBorrowings.filter((b) => b.status === "approved" || b.status === "overdue")
   const pendingBorrowings = myBorrowings.filter((b) => b.status === "pending")

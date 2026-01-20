@@ -1,12 +1,11 @@
 "use client"
 
-import type React from "react"
-
 import { motion } from "framer-motion"
 import { History, User, Package, FileCheck, Settings } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { mockActivityLogs } from "@/lib/mock-data"
+import { useApi } from "@/hooks/use-api"
+import { activityLogsAPI } from "@/lib/api"
 
 const actionIcons: Record<string, React.ElementType> = {
   CREATE_TOOL: Package,
@@ -36,6 +35,9 @@ const actionColors: Record<string, string> = {
 }
 
 export default function LogsPage() {
+  // default [] supaya tidak null
+  const { data: logs = [] } = useApi(() => activityLogsAPI.getAll(), [], { showToast: false })
+
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
@@ -53,37 +55,41 @@ export default function LogsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mockActivityLogs.map((log, index) => {
-                const Icon = actionIcons[log.action] || Settings
-                return (
-                  <motion.div
-                    key={log.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    className="flex items-start gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
-                  >
-                    <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                      <Icon className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-medium">{log.user.name}</span>
-                        <Badge className={actionColors[log.action] || "bg-gray-100 text-gray-700"}>
-                          {log.action.replace(/_/g, " ")}
-                        </Badge>
+              {Array.isArray(logs) && logs.length > 0 ? (
+                logs.map((log, index) => {
+                  const Icon = actionIcons[log.action] || Settings
+                  return (
+                    <motion.div
+                      key={log.id ?? index}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className="flex items-start gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                    >
+                      <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                        <Icon className="h-5 w-5 text-blue-600" />
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{log.description}</p>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {new Date(log.createdAt).toLocaleString("id-ID", {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </p>
-                    </div>
-                  </motion.div>
-                )
-              })}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{log.user?.name ?? "Unknown User"}</span>
+                          <Badge className={actionColors[log.action] || "bg-gray-100 text-gray-700"}>
+                            {log.action.replace(/_/g, " ")}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">{log.description}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(log.createdAt).toLocaleString("id-ID", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </p>
+                      </div>
+                    </motion.div>
+                  )
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">Tidak ada log</p>
+              )}
             </div>
           </CardContent>
         </Card>
